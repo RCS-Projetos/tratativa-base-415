@@ -1,5 +1,4 @@
 from ssw import SSW
-from ssw.selenium import Driver
 
 
 class Report(SSW):
@@ -96,8 +95,3 @@ class Report(SSW):
             raise Exception(payload['error'])
         else:
             return payload
-
-
-new_report = Report(Driver())
-
-

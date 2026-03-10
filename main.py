@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 from report import new_report
 import uvicorn
+from ssw.selenium import Driver
 
 app = FastAPI(title="SSW - Comission Client")
 
@@ -12,7 +13,8 @@ app = FastAPI(title="SSW - Comission Client")
 @app.get("/api/v1/comission/{id}")
 def get_seler_comission(id: str):
     try:
-        data = new_report.execute_report(url="https://sistema.ssw.inf.br/bin/ssw0014", vendedor_id=id)
+        report = Report(Driver())
+        data = report.execute_report(url="https://sistema.ssw.inf.br/bin/ssw0014", vendedor_id=id)
 
         df = pd.DataFrame(data)
         
