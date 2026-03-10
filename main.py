@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import pandas as pd
 import numpy as np
-from report import new_report
+from report import Report
 import uvicorn
 from ssw.selenium import Driver
 
