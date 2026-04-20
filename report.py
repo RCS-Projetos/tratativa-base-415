@@ -1,9 +1,10 @@
 from ssw import SSW
+from ssw.selenium import Driver
 
 
 class Report(SSW):
-    def __init__(self, driver: Driver, download_dir: str = 'Downloads'):
-        super().__init__(driver, download_dir)
+    def __init__(self, driver: Driver, company: str, tax: str, user: str, password: str, download_dir: str = 'Downloads'):
+        super().__init__(driver, company, tax, user, password, download_dir)
 
     
 

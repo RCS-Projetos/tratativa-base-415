@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Dashboard SSW</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        .login-container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--bg-dark);
+        }
+        .login-card {
+            background-color: var(--card-bg);
+            padding: 40px;
+            border-radius: 15px;
+            width: 400px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .login-card h2 {
+            text-align: center;
+            color: var(--text-light);
+            margin-bottom: 25px;
+        }
+        .login-card p {
+            text-align: center;
+            color: var(--secondary);
+            font-size: 14px;
+            margin-bottom: 25px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: var(--secondary);
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background-color: rgba(0, 0, 0, 0.2);
+            color: white;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            transition: 0.3s;
+        }
+        .form-group input:focus {
+            border-color: var(--primary);
+        }
+        .btn-block {
+            width: 100%;
+            justify-content: center;
+            padding: 12px;
+            margin-top: 10px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <h2>SSW-DATA Login</h2>
+            <p>Os dados informados não serão salvos, são usados apenas na sessão atual para extrair os dados do SSW.</p>
+            <form action="{{ url_for('login') }}" method="POST">
+                <div class="form-group">
+                    <label>Domínio / Empresa</label>
+                    <input type="text" name="company" placeholder="Ex: GOL" required>
+                </div>
+                <div class="form-group">
+                    <label>Tax / CPF / CNPJ</label>
+                    <input type="text" name="tax" placeholder="Ex: 00000000000" required>
+                </div>
+                <div class="form-group">
+                    <label>Usuário</label>
+                    <input type="text" name="user" placeholder="Seu usuário" required>
+                </div>
+                <div class="form-group">
+                    <label>Senha</label>
+                    <input type="password" name="password" placeholder="Sua senha" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Entrar</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSW - Dashboard de Comissões</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://kit.fontawesome.com/your-code.js" crossorigin="anonymous"></script>
+</head>
+
+<body>
+    <div class="sidebar">
+        <div class="logo">
+            <i class="fas fa-chart-line"></i> SSW-DATA
+        </div>
+        <a href="/" class="nav-item active">
+            <i class="fas fa-desktop"></i> Dashboard
+        </a>
+        <a href="{{ url_for('export_comissoes') }}" class="nav-item">
+            <i class="fas fa-file-excel"></i> Comissões
+        </a>
+        <a href="{{ url_for('download_template') }}" class="nav-item">
+            <i class="fas fa-download"></i> Modelo Import
+        </a>
+        <a href="{{ url_for('logout') }}" class="nav-item"
+            style="color: #dc3545; margin-top: auto; border-top: 1px solid rgba(255,255,255,0.05); border-radius: 0;">
+            <i class="fas fa-sign-out-alt"></i> Sair do Sistema
+        </a>
+    </div>
+
+    <div class="main-content">
+        <header>
+            <h1>Dashboard de Consultas</h1>
+            <div class="actions">
+                <button class="btn btn-primary" onclick="showModal()">
+                    <i class="fas fa-upload"></i> Importar Vendedores
+                </button>
+            </div>
+        </header>
+
+        <div class="stats-container">
+            <div class="stat-card">
+                <h3>Total Vendedores</h3>
+                <div class="value">{{ stats.total }}</div>
+            </div>
+            <div class="stat-card">
+                <h3>Sucesso</h3>
+                <div class="value" style="color: #28a745;">{{ stats.sucesso }}</div>
+            </div>
+            <div class="stat-card">
+                <h3>Sem Dados</h3>
+                <div class="value" style="color: #8996EB;">{{ stats.vazio }}</div>
+            </div>
+            <div class="stat-card">
+                <h3>Erros</h3>
+                <div class="value" style="color: #dc3545;">{{ stats.erro }}</div>
+            </div>
+        </div>
+
+        <div class="actions-bar">
+            <button class="btn btn-primary" id="btnConsultarTudo" onclick="consultarTudo()">
+                <i class="fas fa-play"></i> Consultar Tudo
+            </button>
+            <button class="btn btn-primary" id="btnConsultarPendentes" onclick="consultarPendentes()">
+                <i class="fas fa-filter"></i> Consultar Pendentes
+            </button>
+            <a href="{{ url_for('export_vendedores') }}" class="btn btn-outline" style="margin-left: auto;">
+                <i class="fas fa-file-export"></i> Exportar Vendedores
+            </a>
+            <a href="{{ url_for('export_comissoes') }}" class="btn btn-outline">
+                <i class="fas fa-file-invoice-dollar"></i> Exportar Consultas
+            </a>
+        </div>
+
+        <div class="filter-tabs">
+            <button class="filter-tab active" onclick="filterTable('todos', this)">Tudo</button>
+            <button class="filter-tab" onclick="filterTable('pendentes', this)">Pendente / Processando</button>
+            <button class="filter-tab" onclick="filterTable('sucesso', this)">Sucesso</button>
+            <button class="filter-tab" onclick="filterTable('erro', this)">Erros / Sem Dados</button>
+        </div>
+
+        <div class="data-table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Equipe</th>
+                        <th>Código</th>
+                        <th>Vendedor</th>
+                        <th>Filial</th>
+                        <th>Vendedor Nome</th>
+                        <th>Status</th>
+                        <th>Última Consulta</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in vendedores %}
+                    <tr>
+                        <td>{{ v.equipe }}</td>
+                        <td>{{ v.codigo }}</td>
+                        <td>{{ v.vendedor_nome }}</td>
+                        <td>{{ v.filial }}</td>
+                        <td>{{ v.nome_completo }}</td>
+                        <td>
+                            <span class="status-badge status-{{ v.status.lower().replace('...', '') }}">
+                                {{ v.status }}
+                            </span>
+                        </td>
+                        <td>{{ v.ultima_consulta.strftime('%d/%m/%Y %H:%M') if v.ultima_consulta else '-' }}</td>
+                        <td>
+                            <button class="btn btn-outline" style="padding: 5px 10px;"
+                                onclick="consultarUm('{{ v.codigo }}')">
+                                <i class="fas fa-sync"> Consultar</i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal Import -->
+    <div id="importModal" class="modal">
+        <div class="modal-content">
+            <h2 style="margin-bottom: 20px;">Importar Vendedores</h2>
+            <p style="margin-bottom: 20px; font-size: 14px; opacity: 0.8;">Selecione um arquivo Excel ou CSV seguindo o
+                modelo.</p>
+            <form action="/import" method="POST" enctype="multipart/form-data">
+                <input type="file" name="file" accept=".csv, .xlsx, .xls">
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button type="submit" class="btn btn-primary">Processar</button>
+                    <button type="button" class="btn btn-outline" onclick="hideModal()">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function filterTable(filterType, btn) {
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            
+            const rows = document.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                const text = row.querySelector('.status-badge').innerText.trim().toLowerCase();
+                if (filterType === 'todos') {
+                    row.style.display = '';
+                } else if (filterType === 'pendentes') {
+                    if (text === 'pendente' || text === 'processando...') {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                } else if (filterType === 'sucesso') {
+                    if (text === 'sucesso') row.style.display = '';
+                    else row.style.display = 'none';
+                } else if (filterType === 'erro') {
+                    if (text === 'erro' || text === 'vazio' || text === 'sem dados') row.style.display = '';
+                    else row.style.display = 'none';
+                }
+            });
+        }
+
+        function showModal() {
+            document.getElementById('importModal').style.display = 'flex';
+        }
+        function hideModal() {
+            document.getElementById('importModal').style.display = 'none';
+        }
+
+        function updateStatsUI() {
+            const badges = document.querySelectorAll('.status-badge');
+            let sucesso = 0;
+            let vazio = 0;
+            let erro = 0;
+
+            badges.forEach(badge => {
+                const text = badge.innerText.trim();
+                if (text === 'Sucesso') sucesso++;
+                else if (text === 'Vazio' || text === 'Sem Dados') vazio++;
+                else if (text === 'Erro') erro++;
+            });
+
+            const values = document.querySelectorAll('.stat-card .value');
+            if (values.length >= 4) {
+                values[1].innerText = sucesso;
+                values[2].innerText = vazio;
+                values[3].innerText = erro;
+            }
+        }
+
+        async function processBatchAsync(rows, btnId, originalHtml) {
+            const btn = document.getElementById(btnId);
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+
+            for (let row of rows) {
+                const codigo = row.children[1].innerText.trim();
+                const badge = row.querySelector('.status-badge');
+
+                badge.className = 'status-badge status-pendente';
+                badge.innerText = 'Processando...';
+
+                try {
+                    const response = await fetch('/consultar', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ codigos: [codigo] })
+                    });
+                    const data = await response.json();
+
+                    if (data.results && data.results.length > 0) {
+                        const status = data.results[0].status;
+                        badge.innerText = status;
+                        let statusClass = status.toLowerCase().replace('...', '');
+                        if (statusClass === 'vazio') statusClass = 'vazio';
+                        badge.className = 'status-badge status-' + statusClass;
+
+                        const now = new Date();
+                        const dataFormatada = ("0" + now.getDate()).slice(-2) + "/" + ("0" + (now.getMonth() + 1)).slice(-2) + "/" + now.getFullYear() + " " + ("0" + now.getHours()).slice(-2) + ":" + ("0" + now.getMinutes()).slice(-2);
+                        row.children[6].innerText = dataFormatada;
+                    }
+                } catch (err) {
+                    badge.innerText = 'Erro';
+                    badge.className = 'status-badge status-erro';
+                }
+
+                updateStatsUI();
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+
+        async function consultarTudo() {
+            const rows = document.querySelectorAll('tbody tr');
+            await processBatchAsync(rows, 'btnConsultarTudo', '<i class="fas fa-play"></i> Consultar Tudo');
+        }
+
+        async function consultarPendentes() {
+            const allRows = Array.from(document.querySelectorAll('tbody tr'));
+            const pendingRows = allRows.filter(row => {
+                const text = row.querySelector('.status-badge').innerText.trim();
+                return text !== 'Sucesso';
+            });
+
+            if (pendingRows.length === 0) {
+                alert("Nenhum vendedor pendente ou com erro.");
+                return;
+            }
+
+            await processBatchAsync(pendingRows, 'btnConsultarPendentes', '<i class="fas fa-filter"></i> Consultar Pendentes');
+        }
+
+        async function consultarUm(codigo) {
+            const btn = event.currentTarget || event.target.closest('.btn');
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            try {
+                const response = await fetch('/consultar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ codigos: [codigo] })
+                });
+                const data = await response.json();
+
+                // Atualiza a linha e tudo
+                if (data.results && data.results.length > 0) {
+                    const status = data.results[0].status;
+                    const row = btn.closest('tr');
+                    const badge = row.querySelector('.status-badge');
+                    badge.innerText = status;
+                    let statusClass = status.toLowerCase().replace('...', '');
+                    if (statusClass === 'vazio') statusClass = 'vazio';
+                    badge.className = 'status-badge status-' + statusClass;
+
+                    const now = new Date();
+                    const dataFormatada = ("0" + now.getDate()).slice(-2) + "/" + ("0" + (now.getMonth() + 1)).slice(-2) + "/" + now.getFullYear() + " " + ("0" + now.getHours()).slice(-2) + ":" + ("0" + now.getMinutes()).slice(-2);
+                    row.children[6].innerText = dataFormatada;
+
+                    updateStatsUI();
+                }
+
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            } catch (err) {
+                alert('Erro na consulta');
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
+    </script>
+    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+</body>
+
+</html>

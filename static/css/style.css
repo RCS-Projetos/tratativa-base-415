@@ -1,0 +1,251 @@
+:root {
+    --bg-dark: #030723;
+    --card-bg: #1C2359;
+    --primary: #3E4BA3;
+    --secondary: #8996EB;
+    --text-light: #DDDFEF;
+    --success: #28a745;
+    --danger: #dc3545;
+    --warning: #ffc107;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', sans-serif;
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-light);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 260px;
+    background-color: #060b28;
+    padding: 20px;
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.logo {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 40px;
+    color: var(--secondary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.nav-item {
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    color: var(--text-light);
+    text-decoration: none;
+}
+
+.nav-item:hover, .nav-item.active {
+    background-color: var(--primary);
+    box-shadow: 0 4px 15px rgba(62, 75, 163, 0.4);
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    flex-shrink: 0;
+}
+
+.stats-container {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    margin-bottom: 20px;
+    flex-shrink: 0;
+}
+
+.stat-card {
+    background-color: var(--card-bg);
+    padding: 25px;
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: 0.3s;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.stat-card h3 {
+    font-size: 14px;
+    color: var(--secondary);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+}
+
+.stat-card .value {
+    font-size: 32px;
+    font-weight: 700;
+}
+
+/* Actions Section */
+.actions-bar {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+    flex-shrink: 0;
+}
+
+.btn {
+    padding: 12px 24px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    transition: 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.btn-primary {
+    background-color: var(--primary);
+    color: white;
+}
+
+.btn-primary:hover {
+    filter: brightness(1.2);
+}
+
+.btn-outline {
+    background-color: transparent;
+    border: 1px solid var(--primary);
+    color: var(--secondary);
+}
+
+.btn-outline:hover {
+    background-color: var(--primary);
+    color: white;
+}
+
+/* Table Section */
+.data-table-container {
+    background-color: var(--card-bg);
+    border-radius: 15px;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* Fix header table when scrolling */
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th {
+    text-align: left;
+    padding: 15px;
+    color: var(--secondary);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    position: sticky;
+    top: -20px;
+    background-color: var(--card-bg);
+    z-index: 10;
+}
+
+td {
+    padding: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Modos de visualizacao (Filtros) */
+.filter-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-shrink: 0;
+}
+.filter-tab {
+    padding: 8px 16px;
+    border-radius: 20px;
+    background-color: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-light);
+    cursor: pointer;
+    font-size: 13px;
+    transition: 0.3s;
+}
+.filter-tab:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+.filter-tab.active {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.status-sucesso { background: rgba(40, 167, 69, 0.2); color: #28a745; }
+.status-pendente { background: rgba(255, 193, 7, 0.2); color: #ffc107; }
+.status-erro { background: rgba(220, 53, 69, 0.2); color: #dc3545; }
+.status-vazio { background: rgba(255, 255, 255, 0.1); color: #8996EB; }
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(5px);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: var(--card-bg);
+    padding: 40px;
+    border-radius: 20px;
+    width: 450px;
+    text-align: center;
+}
+
+input[type="file"] {
+    margin-bottom: 20px;
+}

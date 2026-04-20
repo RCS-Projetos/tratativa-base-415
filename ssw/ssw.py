@@ -9,14 +9,15 @@ load_dotenv()
 
 
 class SSW:
-    def __init__(self, driver: Driver, download_dir: str = 'Downloads'):
+    def __init__(self, driver: Driver, company: str, tax: str, user: str, password: str, download_dir: str = 'Downloads'):
         self.logger = Logger()
-        self.tax = os.getenv("SSW_TAX")
-        self.company = os.getenv("SSW_COMPANY")
-        self.user = os.getenv("SSW_USER")
-        self.password = os.getenv("SSW_PASSWORD")
+        self.tax = tax
+        self.company = company
+        self.user = user
+        self.password = password
         self.download_dir = download_dir
         self.driver_instance = driver
+
     
     def driver(self):
         return self.driver_instance
