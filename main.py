@@ -1,6 +1,7 @@
 import os
 import uuid
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session
 from models import db, Vendedor, Comissao
 from report import Report
@@ -267,7 +268,7 @@ def consultar():
                     oldest_id = consultas_unicas[0][0]
                     Comissao.query.filter_by(session_id=s_id, vendedor_id=vendedor.id, consulta_id=oldest_id).delete()
             
-            vendedor.ultima_consulta = datetime.utcnow()
+            vendedor.ultima_consulta = datetime.now(ZoneInfo('America/Sao_Paulo')).replace(tzinfo=None)
             db.session.commit()
             results.append({"codigo": codigo, "status": vendedor.status})
             

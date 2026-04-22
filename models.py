@@ -1,5 +1,9 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+def get_br_time():
+    return datetime.now(ZoneInfo('America/Sao_Paulo')).replace(tzinfo=None)
 
 db = SQLAlchemy()
 
@@ -50,4 +54,4 @@ class Comissao(db.Model):
     mercadoria = db.Column(db.String(255))
     observacao = db.Column(db.Text)
     
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=get_br_time)
