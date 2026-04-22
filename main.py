@@ -1,87 +1,282 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import List, Optional
-import pandas as pd
-import numpy as np
+import os
+import uuid
+from datetime import datetime
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session
+from models import db, Vendedor, Comissao
 from report import Report
-import uvicorn
 from ssw.selenium import Driver
+import pandas as pd
+import io
 
-app = FastAPI(title="SSW - Comission Client")
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = 'ssw-dashboard-secret' # Simples para uso local
 
+db.init_app(app)
 
-@app.get("/api/v1/comission/{id}")
-def get_seler_comission(id: str):
+# Cria as tabelas se não existirem
+with app.app_context():
+    db.create_all()
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        # Se havia um session_id antigo que não foi deslogado, limpar os dados dele!
+        old_session_id = session.get('session_id')
+        if old_session_id:
+            try:
+                Comissao.query.filter_by(session_id=old_session_id).delete()
+                Vendedor.query.filter_by(session_id=old_session_id).delete()
+                db.session.commit()
+            except:
+                db.session.rollback()
+                
+        session['company'] = request.form.get('company')
+        session['tax'] = request.form.get('tax')
+        session['user'] = request.form.get('user')
+        session['password'] = request.form.get('password')
+        session['session_id'] = str(uuid.uuid4())
+        
+        return redirect(url_for('index'))
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session_id = session.get('session_id')
+    if session_id:
+        try:
+            Comissao.query.filter_by(session_id=session_id).delete()
+            Vendedor.query.filter_by(session_id=session_id).delete()
+            db.session.commit()
+        except:
+            db.session.rollback()
+            
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.route('/')
+def index():
+    if 'user' not in session or 'session_id' not in session:
+        return redirect(url_for('login'))
+        
+    s_id = session['session_id']
+    vendedores = Vendedor.query.filter_by(session_id=s_id).order_by(Vendedor.equipe.asc(), Vendedor.codigo.asc()).all()
+    total = len(vendedores)
+    sucesso = Vendedor.query.filter_by(session_id=s_id, status='Sucesso').count()
+    vazio = Vendedor.query.filter_by(session_id=s_id).filter(Vendedor.status.in_(['Vazio', 'Sem Dados'])).count()
+    erro = Vendedor.query.filter_by(session_id=s_id, status='Erro').count()
+    
+    stats = {
+        "total": total,
+        "sucesso": sucesso,
+        "vazio": vazio,
+        "erro": erro
+    }
+    return render_template('index.html', vendedores=vendedores, stats=stats)
+
+@app.route('/import', methods=['POST'])
+def import_vendedores():
+    if 'file' not in request.files:
+        return redirect(url_for('index'))
+    
+    file = request.files['file']
+    if file.filename == '':
+        return redirect(url_for('index'))
+    
     try:
-        report = Report(Driver())
-        data = report.execute_report(url="https://sistema.ssw.inf.br/bin/ssw0014", vendedor_id=id)
-
-        df = pd.DataFrame(data)
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(file)
+        else:
+            df = pd.read_excel(file)
+            
+        # Mapeamento de colunas (conforme solicitado pelo usuário)
+        # Equipe, Código, Vendedor, Filial, Nome
+        required_cols = ['Equipe', 'Código', 'Vendedor', 'Filial', 'Nome']
+        for col in required_cols:
+            if col not in df.columns:
+                return f"Coluna obrigatória ausente: {col}", 400
         
-        try:
-            print('Corrigindo Percentuais')
-            cols_pct = ['Conquista_Pct', 'Manut_1_Pct', 'Manut_2_Pct']
-            for col in cols_pct:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Erro no processamento: {str(e)}")
-        
-        try:
-            print('Corrigindo Datas e Formatos de Ano')
-            cols_data = [
-                'Conquista_Inicio', 'Conquista_Fim', 
-                'Manut_1_Inicio', 'Manut_1_Fim', 
-                'Manut_2_Inicio', 'Manut_2_Fim'
-            ]
-
-            def normalizar_ano_ssw(data_str):
-                if pd.isna(data_str) or str(data_str).strip() == "":
-                    return None
-                
-                partes = str(data_str).split('/')
-                if len(partes) == 3:
-                    dia, mes, ano = partes
-                    # Se o ano tiver apenas 2 dígitos, aplica a regra do SSW
-                    if len(ano) == 2:
-                        ano_int = int(ano)
-                        # Regra SSW: >= 70 vira 19xx, < 70 vira 20xx
-                        ano = str(1900 + ano_int) if ano_int >= 70 else str(2000 + ano_int)
-                        return f"{dia}/{mes}/{ano}"
-                return data_str
-
-            for col in cols_data:
-                # 1. Aplica a correção de 2 para 4 dígitos antes da conversão
-                df[col] = df[col].apply(normalizar_ano_ssw)
-                
-                # 2. Converte para Datetime (Trata NaT para anos > 2262 como 2999)
-                # O Pandas não suporta o ano 2999 como objeto de tempo
-                # Por isso, convertemos e formatamos de volta para string imediatamente
-                df[col] = pd.to_datetime(df[col], format='%d/%m/%Y', errors='coerce').dt.strftime('%Y-%m-%d')
-
-            # --- TRATAMENTO FINAL PARA JSON ---
-            # Garante que NaT ou NaN não quebrem o FastAPI
-            df = df.replace({np.nan: None, "NaT": None, "nan": None})
-
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Erro na normalização de datas: {str(e)}")
-
-        try:
-            print('Corrigindo valores nulos')
-            df = df.where(pd.notnull(df), None)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Erro no processamento: {str(e)}")
-
-        return {
-            "status": "success",
-            "seler_code": id,
-            "total_registers": len(df),
-            "data": df.to_dict(orient="records")
-        }
-
-
+        for _, row in df.iterrows():
+            codigo = str(row['Código'])
+            vendedor = Vendedor.query.filter_by(session_id=session['session_id'], codigo=codigo).first()
+            if not vendedor:
+                vendedor = Vendedor(session_id=session['session_id'], codigo=codigo)
+            
+            vendedor.equipe = row['Equipe']
+            vendedor.vendedor_nome = row['Vendedor']
+            vendedor.filial = row['Filial']
+            vendedor.nome_completo = row['Nome']
+            vendedor.status = 'Pendente'
+            db.session.add(vendedor)
+            
+        db.session.commit()
+        return redirect(url_for('index'))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro no processamento: {str(e)}")
+        return f"Erro na importação: {str(e)}", 500
 
+@app.route('/template')
+def download_template():
+    # Cria um modelo Excel vazio com as colunas corretas
+    cols = ['Equipe', 'Código', 'Vendedor', 'Filial', 'Nome']
+    df = pd.DataFrame(columns=cols)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Modelo')
+    output.seek(0)
+    return send_file(output, download_name="modelo_importacao.xlsx", as_attachment=True)
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+@app.route('/export/vendedores')
+def export_vendedores():
+    if 'session_id' not in session: return redirect(url_for('login'))
+    vendedores = Vendedor.query.filter_by(session_id=session['session_id']).all()
+    data = []
+    for v in vendedores:
+        data.append({
+            'Equipe': v.equipe,
+            'Código': v.codigo,
+            'Vendedor': v.vendedor_nome,
+            'Filial': v.filial,
+            'Nome': v.nome_completo,
+            'Status': v.status,
+            'Última Consulta': v.ultima_consulta
+        })
+    df = pd.DataFrame(data)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False)
+    output.seek(0)
+    return send_file(output, download_name="vendedores.xlsx", as_attachment=True)
+
+@app.route('/export/comissoes')
+def export_comissoes():
+    if 'session_id' not in session: return redirect(url_for('login'))
+    comissoes = Comissao.query.filter_by(session_id=session['session_id']).order_by(Comissao.timestamp.desc()).all()
+    data = []
+    for c in comissoes:
+        data.append({
+            'Equipe': c.equipe,
+            'Código': c.codigo,
+            'Vendedor': c.vendedor,
+            'Filial': c.filial,
+            'Nome': c.nome_vendedor,
+            'Clientes': c.clientes,
+            'CNPJ': c.cnpj,
+            'Cidade': c.cidade,
+            'Nome_Cliente': c.nome_cliente,
+            'Conquista_Inicio': c.conquista_inicio,
+            'Conquista_Fim': c.conquista_fim,
+            'Conquista_Pct': c.conquista_pct,
+            'Manut_1_Inicio': c.manut_1_inicio,
+            'Manut_1_Fim': c.manut_1_fim,
+            'Manut_1_Pct': c.manut_1_pct,
+            'Manut_2_Inicio': c.manut_2_inicio,
+            'Manut_2_Fim': c.manut_2_fim,
+            'Manut_2_Pct': c.manut_2_pct,
+            'Mercadoria': c.mercadoria,
+            'Observação': c.observacao,
+            'Consulta_ID': c.consulta_id,
+            'Data_Registro': c.timestamp
+        })
+    df = pd.DataFrame(data)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False)
+    output.seek(0)
+    return send_file(output, download_name="comissoes.xlsx", as_attachment=True)
+
+@app.route('/consultar', methods=['POST'])
+def consultar():
+    if 'user' not in session or 'session_id' not in session:
+        return jsonify({"status": "Erro", "msg": "Usuário não autenticado"}), 401
+    
+    codigos = request.json.get('codigos', [])
+    s_id = session['session_id']
+    
+    if not codigos:
+        vendedores = Vendedor.query.filter_by(session_id=s_id).all()
+        codigos = [v.codigo for v in vendedores]
+    driver = Driver()
+    report = Report(
+        driver, 
+        session['company'], 
+        session['tax'], 
+        session['user'], 
+        session['password']
+    )
+    
+    results = []
+    
+    for codigo in codigos:
+        vendedor = Vendedor.query.filter_by(session_id=s_id, codigo=codigo).first()
+        if not vendedor: continue
+        
+        try:
+            vendedor.status = 'Processando...'
+            db.session.commit()
+            
+            data = report.execute_report(url="https://sistema.ssw.inf.br/bin/ssw0014", vendedor_id=codigo)
+            
+            if not data or len(data) == 0:
+                vendedor.status = 'Vazio'
+            else:
+                consulta_id = str(uuid.uuid4())[:8] # ID único para este lote de comissões
+                # Helper para evitar tentar converter string vazia para float
+                def safe_float(val):
+                    if val is None or val == '':
+                        return None
+                    try:
+                        return float(val)
+                    except ValueError:
+                        return None
+
+                vendedor.status = 'Sucesso'
+                # Salvar registros de comissão
+                for row in data:
+                    comissao = Comissao(
+                        session_id=s_id,
+                        consulta_id=consulta_id,
+                        vendedor_id=vendedor.id,
+                        equipe=vendedor.equipe,
+                        codigo=vendedor.codigo,
+                        vendedor=vendedor.vendedor_nome,
+                        filial=vendedor.filial,
+                        nome_vendedor=vendedor.nome_completo,
+                        clientes=row.get('Clientes', ''),
+                        cnpj=row.get('CNPJ', ''),
+                        cidade=row.get('Cidade', ''),
+                        nome_cliente=row.get('Nome', ''),
+                        conquista_inicio=row.get('Conquista_Inicio', ''),
+                        conquista_fim=row.get('Conquista_Fim', ''),
+                        conquista_pct=safe_float(row.get('Conquista_Pct')),
+                        manut_1_inicio=row.get('Manut_1_Inicio', ''),
+                        manut_1_fim=row.get('Manut_1_Fim', ''),
+                        manut_1_pct=safe_float(row.get('Manut_1_Pct')),
+                        manut_2_inicio=row.get('Manut_2_Inicio', ''),
+                        manut_2_fim=row.get('Manut_2_Fim', ''),
+                        manut_2_pct=safe_float(row.get('Manut_2_Pct')),
+                        mercadoria=row.get('Mercadoria', ''),
+                        observacao=row.get('Observacao', '')
+                    )
+                    db.session.add(comissao)
+                
+                # Gerenciar Histórico (Máximo 3)
+                consultas_unicas = db.session.query(Comissao.consulta_id).filter_by(session_id=s_id, vendedor_id=vendedor.id).distinct().all()
+                if len(consultas_unicas) > 3:
+                    # Remove a mais antiga
+                    oldest_id = consultas_unicas[0][0]
+                    Comissao.query.filter_by(session_id=s_id, vendedor_id=vendedor.id, consulta_id=oldest_id).delete()
+            
+            vendedor.ultima_consulta = datetime.utcnow()
+            db.session.commit()
+            results.append({"codigo": codigo, "status": vendedor.status})
+            
+        except Exception as e:
+            vendedor.status = 'Erro'
+            db.session.commit()
+            results.append({"codigo": codigo, "status": "Erro", "msg": str(e)})
+
+    return jsonify({"status": "Finished", "results": results})
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)

@@ -194,6 +194,8 @@ td {
     gap: 10px;
     margin-bottom: 15px;
     flex-shrink: 0;
+    flex-wrap: wrap;
+    align-items: center;
 }
 .filter-tab {
     padding: 8px 16px;

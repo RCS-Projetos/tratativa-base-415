@@ -5,7 +5,9 @@ db = SQLAlchemy()
 
 class Vendedor(db.Model):
     __tablename__ = 'vendedores'
-    codigo = db.Column(db.String(50), primary_key=True) # Código
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.String(100), index=True)
+    codigo = db.Column(db.String(50)) # Código
     equipe = db.Column(db.String(100)) # Equipe
     vendedor_nome = db.Column(db.String(255)) # Vendedor
     filial = db.Column(db.String(100)) # Filial
@@ -16,8 +18,9 @@ class Vendedor(db.Model):
 class Comissao(db.Model):
     __tablename__ = 'comissoes'
     id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.String(100), index=True)
     consulta_id = db.Column(db.String(100), index=True) # ID_Consulta único por lote
-    vendedor_codigo = db.Column(db.String(50), db.ForeignKey('vendedores.codigo'))
+    vendedor_id = db.Column(db.Integer, db.ForeignKey('vendedores.id'))
     
     # Dados vindos do vendedor
     equipe = db.Column(db.String(100))

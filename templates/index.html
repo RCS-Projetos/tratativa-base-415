@@ -74,11 +74,17 @@
             </a>
         </div>
 
-        <div class="filter-tabs">
+        <div class="filter-tabs" id="status-filters">
             <button class="filter-tab active" onclick="filterTable('todos', this)">Tudo</button>
             <button class="filter-tab" onclick="filterTable('pendentes', this)">Pendente / Processando</button>
             <button class="filter-tab" onclick="filterTable('sucesso', this)">Sucesso</button>
             <button class="filter-tab" onclick="filterTable('erro', this)">Erros / Sem Dados</button>
+        </div>
+
+        <div class="filter-tabs" id="filial-filters" style="margin-top: 10px;">
+            <span style="font-size: 13px; color: var(--text-muted); margin-right: 10px; font-weight: 600;">Filiais:</span>
+            <button class="filter-tab active" onclick="filterByFilial('todas', this)">Todas</button>
+            <!-- Filiais dinâmicas serão inseridas via JS -->
         </div>
 
         <div class="data-table-container">
@@ -126,42 +132,105 @@
     <div id="importModal" class="modal">
         <div class="modal-content">
             <h2 style="margin-bottom: 20px;">Importar Vendedores</h2>
-            <p style="margin-bottom: 20px; font-size: 14px; opacity: 0.8;">Selecione um arquivo Excel ou CSV seguindo o
-                modelo.</p>
+            <p style="margin-bottom: 5px; font-size: 14px; opacity: 0.8;">Selecione um arquivo Excel ou CSV seguindo o modelo.</p>
+            <a href="{{ url_for('download_template') }}" style="display: inline-block; margin-bottom: 20px; color: var(--primary); text-decoration: none; font-size: 14px; font-weight: 600;">
+                <i class="fas fa-download"></i> Baixar Modelo de Planilha
+            </a>
             <form action="/import" method="POST" enctype="multipart/form-data">
-                <input type="file" name="file" accept=".csv, .xlsx, .xls">
-                <div style="display: flex; gap: 10px; justify-content: center;">
-                    <button type="submit" class="btn btn-primary">Processar</button>
-                    <button type="button" class="btn btn-outline" onclick="hideModal()">Cancelar</button>
+                <input type="file" name="file" accept=".csv, .xlsx, .xls" required>
+                <div style="display: flex; gap: 10px; justify-content: center; align-items: center; flex-direction: column;">
+                    <div style="display: flex; gap: 10px;">
+                        <button type="submit" class="btn btn-primary">Processar</button>
+                        {% if stats.total > 0 %}
+                        <button type="button" class="btn btn-outline" onclick="hideModal()">Cancelar</button>
+                        {% endif %}
+                    </div>
+                    {% if stats.total == 0 %}
+                    <p style="color: #dc3545; font-size: 13px; margin-top: 10px;">
+                        <i class="fas fa-exclamation-circle"></i> O envio da planilha é obrigatório para iniciar a sessão.
+                    </p>
+                    {% endif %}
                 </div>
             </form>
         </div>
     </div>
 
+    {% if stats.total == 0 %}
     <script>
-        function filterTable(filterType, btn) {
-            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-            btn.classList.add('active');
-            
+        window.addEventListener('DOMContentLoaded', (event) => {
+            showModal();
+        });
+    </script>
+    {% endif %}
+
+    <script>
+        let currentStatusFilter = 'todos';
+        let currentFilialFilter = 'todas';
+
+        window.addEventListener('DOMContentLoaded', (event) => {
+            // Preenche dinamicamente os botões de filiais
             const rows = document.querySelectorAll('tbody tr');
+            const filiais = new Set();
             rows.forEach(row => {
-                const text = row.querySelector('.status-badge').innerText.trim().toLowerCase();
-                if (filterType === 'todos') {
-                    row.style.display = '';
-                } else if (filterType === 'pendentes') {
-                    if (text === 'pendente' || text === 'processando...') {
-                        row.style.display = '';
-                    } else {
-                        row.style.display = 'none';
-                    }
-                } else if (filterType === 'sucesso') {
-                    if (text === 'sucesso') row.style.display = '';
-                    else row.style.display = 'none';
-                } else if (filterType === 'erro') {
-                    if (text === 'erro' || text === 'vazio' || text === 'sem dados') row.style.display = '';
-                    else row.style.display = 'none';
+                const filialCell = row.querySelector('td:nth-child(4)'); // Coluna Filial
+                if (filialCell) {
+                    const filial = filialCell.innerText.trim();
+                    if (filial) filiais.add(filial);
                 }
             });
+            
+            const filialContainer = document.getElementById('filial-filters');
+            Array.from(filiais).sort().forEach(filial => {
+                const btn = document.createElement('button');
+                btn.className = 'filter-tab';
+                btn.innerText = filial;
+                btn.onclick = function() { filterByFilial(filial, this); };
+                filialContainer.appendChild(btn);
+            });
+        });
+
+        function applyFilters() {
+            const rows = document.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                const statusBadge = row.querySelector('.status-badge');
+                if (!statusBadge) return;
+                
+                const statusText = statusBadge.innerText.trim().toLowerCase();
+                const filialText = row.querySelector('td:nth-child(4)').innerText.trim();
+                
+                let matchesStatus = false;
+                if (currentStatusFilter === 'todos') {
+                    matchesStatus = true;
+                } else if (currentStatusFilter === 'pendentes') {
+                    matchesStatus = (statusText === 'pendente' || statusText === 'processando...');
+                } else if (currentStatusFilter === 'sucesso') {
+                    matchesStatus = (statusText === 'sucesso');
+                } else if (currentStatusFilter === 'erro') {
+                    matchesStatus = (statusText === 'erro' || statusText === 'vazio' || statusText === 'sem dados');
+                }
+                
+                let matchesFilial = (currentFilialFilter === 'todas') || (filialText === currentFilialFilter);
+                
+                if (matchesStatus && matchesFilial) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        function filterTable(filterType, btn) {
+            document.querySelectorAll('#status-filters .filter-tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            currentStatusFilter = filterType;
+            applyFilters();
+        }
+
+        function filterByFilial(filial, btn) {
+            document.querySelectorAll('#filial-filters .filter-tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            currentFilialFilter = filial;
+            applyFilters();
         }
 
         function showModal() {
