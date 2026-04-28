@@ -4,10 +4,19 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session
 from models import db, Vendedor, Comissao
-from report import Report
-from ssw.selenium import Driver
+from src.report import Report
 import pandas as pd
 import io
+import logging
+import json
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler() # Garante que saia no terminal
+    ]
+)
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
@@ -33,7 +42,7 @@ def login():
             except:
                 db.session.rollback()
                 
-        session['company'] = request.form.get('company')
+        session['company'] = 'rcs'
         session['tax'] = request.form.get('tax')
         session['user'] = request.form.get('user')
         session['password'] = request.form.get('password')
@@ -191,93 +200,22 @@ def consultar():
     if 'user' not in session or 'session_id' not in session:
         return jsonify({"status": "Erro", "msg": "Usuário não autenticado"}), 401
     
+    user = {
+        'company': session['company'], 
+        'tax': session['tax'], 
+        'user': session['user'], 
+        'password': session['password']
+    }
+    
+    report = Report(user, 'https://sistema.ssw.inf.br/bin/ssw0014')
     codigos = request.json.get('codigos', [])
     s_id = session['session_id']
-    
-    if not codigos:
-        vendedores = Vendedor.query.filter_by(session_id=s_id).all()
-        codigos = [v.codigo for v in vendedores]
-    driver = Driver()
-    report = Report(
-        driver, 
-        session['company'], 
-        session['tax'], 
-        session['user'], 
-        session['password']
-    )
-    
-    results = []
-    
-    for codigo in codigos:
-        vendedor = Vendedor.query.filter_by(session_id=s_id, codigo=codigo).first()
-        if not vendedor: continue
-        
-        try:
-            vendedor.status = 'Processando...'
-            db.session.commit()
-            
-            data = report.execute_report(url="https://sistema.ssw.inf.br/bin/ssw0014", vendedor_id=codigo)
-            
-            if not data or len(data) == 0:
-                vendedor.status = 'Vazio'
-            else:
-                consulta_id = str(uuid.uuid4())[:8] # ID único para este lote de comissões
-                # Helper para evitar tentar converter string vazia para float
-                def safe_float(val):
-                    if val is None or val == '':
-                        return None
-                    try:
-                        return float(val)
-                    except ValueError:
-                        return None
+    def stream():
+        with app.app_context():
+            for res in report.run(s_id, codigos):
+                yield json.dumps(res) + "\n"
 
-                vendedor.status = 'Sucesso'
-                # Salvar registros de comissão
-                for row in data:
-                    comissao = Comissao(
-                        session_id=s_id,
-                        consulta_id=consulta_id,
-                        vendedor_id=vendedor.id,
-                        equipe=vendedor.equipe,
-                        codigo=vendedor.codigo,
-                        vendedor=vendedor.vendedor_nome,
-                        filial=vendedor.filial,
-                        nome_vendedor=vendedor.nome_completo,
-                        clientes=row.get('Clientes', ''),
-                        cnpj=row.get('CNPJ', ''),
-                        cidade=row.get('Cidade', ''),
-                        nome_cliente=row.get('Nome', ''),
-                        conquista_inicio=row.get('Conquista_Inicio', ''),
-                        conquista_fim=row.get('Conquista_Fim', ''),
-                        conquista_pct=safe_float(row.get('Conquista_Pct')),
-                        manut_1_inicio=row.get('Manut_1_Inicio', ''),
-                        manut_1_fim=row.get('Manut_1_Fim', ''),
-                        manut_1_pct=safe_float(row.get('Manut_1_Pct')),
-                        manut_2_inicio=row.get('Manut_2_Inicio', ''),
-                        manut_2_fim=row.get('Manut_2_Fim', ''),
-                        manut_2_pct=safe_float(row.get('Manut_2_Pct')),
-                        mercadoria=row.get('Mercadoria', ''),
-                        observacao=row.get('Observacao', '')
-                    )
-                    db.session.add(comissao)
-                
-                # Gerenciar Histórico (Máximo 3)
-                consultas_unicas = db.session.query(Comissao.consulta_id).filter_by(session_id=s_id, vendedor_id=vendedor.id).distinct().all()
-                if len(consultas_unicas) > 3:
-                    # Remove a mais antiga
-                    oldest_id = consultas_unicas[0][0]
-                    Comissao.query.filter_by(session_id=s_id, vendedor_id=vendedor.id, consulta_id=oldest_id).delete()
-            
-            vendedor.ultima_consulta = datetime.now(ZoneInfo('America/Sao_Paulo')).replace(tzinfo=None)
-            db.session.commit()
-            results.append({"codigo": codigo, "status": vendedor.status})
-            
-        except Exception as e:
-            vendedor.status = 'Erro'
-            db.session.commit()
-            results.append({"codigo": codigo, "status": "Erro", "msg": str(e)})
-
-    return jsonify({"status": "Finished", "results": results})
+    return app.response_class(stream(), mimetype='application/x-ndjson')
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

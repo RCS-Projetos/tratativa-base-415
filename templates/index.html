@@ -11,32 +11,18 @@
 </head>
 
 <body>
-    <div class="sidebar">
-        <div class="logo">
-            <i class="fas fa-chart-line"></i> SSW-DATA
-        </div>
-        <a href="/" class="nav-item active">
-            <i class="fas fa-desktop"></i> Dashboard
-        </a>
-        <a href="{{ url_for('export_comissoes') }}" class="nav-item">
-            <i class="fas fa-file-excel"></i> Comissões
-        </a>
-        <a href="{{ url_for('download_template') }}" class="nav-item">
-            <i class="fas fa-download"></i> Modelo Import
-        </a>
-        <a href="{{ url_for('logout') }}" class="nav-item"
-            style="color: #dc3545; margin-top: auto; border-top: 1px solid rgba(255,255,255,0.05); border-radius: 0;">
-            <i class="fas fa-sign-out-alt"></i> Sair do Sistema
-        </a>
-    </div>
+
 
     <div class="main-content">
         <header>
             <h1>Dashboard de Consultas</h1>
-            <div class="actions">
+            <div class="actions" style="display: flex; gap: 10px;">
                 <button class="btn btn-primary" onclick="showModal()">
                     <i class="fas fa-upload"></i> Importar Vendedores
                 </button>
+                <a href="{{ url_for('logout') }}" class="btn" style="background-color: var(--danger); color: white;">
+                    <i class="fas fa-sign-out-alt"></i> Sair do Sistema
+                </a>
             </div>
         </header>
 
@@ -266,40 +252,65 @@
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
 
+            const codigos = [];
             for (let row of rows) {
                 const codigo = row.children[1].innerText.trim();
                 const badge = row.querySelector('.status-badge');
-
                 badge.className = 'status-badge status-pendente';
                 badge.innerText = 'Processando...';
+                codigos.push(codigo);
+            }
 
-                try {
-                    const response = await fetch('/consultar', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ codigos: [codigo] })
-                    });
-                    const data = await response.json();
+            try {
+                const response = await fetch('/consultar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ codigos: codigos })
+                });
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
 
-                    if (data.results && data.results.length > 0) {
-                        const status = data.results[0].status;
-                        badge.innerText = status;
-                        let statusClass = status.toLowerCase().replace('...', '');
-                        if (statusClass === 'vazio') statusClass = 'vazio';
-                        badge.className = 'status-badge status-' + statusClass;
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // keep last incomplete line
 
-                        const now = new Date();
-                        const dataFormatada = ("0" + now.getDate()).slice(-2) + "/" + ("0" + (now.getMonth() + 1)).slice(-2) + "/" + now.getFullYear() + " " + ("0" + now.getHours()).slice(-2) + ":" + ("0" + now.getMinutes()).slice(-2);
-                        row.children[6].innerText = dataFormatada;
+                    for (let line of lines) {
+                        if (!line.trim()) continue;
+                        let result;
+                        try { result = JSON.parse(line); } catch(e) { continue; }
+                        
+                        const codigo = result.codigo;
+                        const status = result.status || result.error;
+                        // Find row
+                        const row = Array.from(rows).find(r => r.children[1].innerText.trim() === codigo);
+                        if (row) {
+                            const badge = row.querySelector('.status-badge');
+                            badge.innerText = status;
+                            let statusClass = status.toLowerCase().replace('...', '');
+                            if (statusClass === 'vazio') statusClass = 'vazio';
+                            badge.className = 'status-badge status-' + statusClass;
+
+                            const now = new Date();
+                            const dataFormatada = ("0" + now.getDate()).slice(-2) + "/" + ("0" + (now.getMonth() + 1)).slice(-2) + "/" + now.getFullYear() + " " + ("0" + now.getHours()).slice(-2) + ":" + ("0" + now.getMinutes()).slice(-2);
+                            row.children[6].innerText = dataFormatada;
+                        }
+                        updateStatsUI();
                     }
-                } catch (err) {
+                }
+            } catch (err) {
+                for (let row of rows) {
+                    const badge = row.querySelector('.status-badge');
                     badge.innerText = 'Erro';
                     badge.className = 'status-badge status-erro';
                 }
-
-                updateStatsUI();
             }
 
+            updateStatsUI();
             btn.disabled = false;
             btn.innerHTML = originalHtml;
         }
@@ -335,23 +346,37 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ codigos: [codigo] })
                 });
-                const data = await response.json();
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
 
-                // Atualiza a linha e tudo
-                if (data.results && data.results.length > 0) {
-                    const status = data.results[0].status;
-                    const row = btn.closest('tr');
-                    const badge = row.querySelector('.status-badge');
-                    badge.innerText = status;
-                    let statusClass = status.toLowerCase().replace('...', '');
-                    if (statusClass === 'vazio') statusClass = 'vazio';
-                    badge.className = 'status-badge status-' + statusClass;
+                    for (let line of lines) {
+                        if (!line.trim()) continue;
+                        let result;
+                        try { result = JSON.parse(line); } catch(e) { continue; }
+                        
+                        const status = result.status || result.error;
+                        const row = btn.closest('tr');
+                        const badge = row.querySelector('.status-badge');
+                        badge.innerText = status;
+                        let statusClass = status.toLowerCase().replace('...', '');
+                        if (statusClass === 'vazio') statusClass = 'vazio';
+                        badge.className = 'status-badge status-' + statusClass;
 
-                    const now = new Date();
-                    const dataFormatada = ("0" + now.getDate()).slice(-2) + "/" + ("0" + (now.getMonth() + 1)).slice(-2) + "/" + now.getFullYear() + " " + ("0" + now.getHours()).slice(-2) + ":" + ("0" + now.getMinutes()).slice(-2);
-                    row.children[6].innerText = dataFormatada;
+                        const now = new Date();
+                        const dataFormatada = ("0" + now.getDate()).slice(-2) + "/" + ("0" + (now.getMonth() + 1)).slice(-2) + "/" + now.getFullYear() + " " + ("0" + now.getHours()).slice(-2) + ":" + ("0" + now.getMinutes()).slice(-2);
+                        row.children[6].innerText = dataFormatada;
 
-                    updateStatsUI();
+                        updateStatsUI();
+                    }
                 }
 
                 btn.disabled = false;
