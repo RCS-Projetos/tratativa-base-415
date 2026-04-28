@@ -12,6 +12,7 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
 
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/pw-browsers
 RUN uv sync --frozen --no-install-project --no-dev
 RUN uv run playwright install chromium
 
@@ -35,8 +36,10 @@ ENV TZ=America/Sao_Paulo
 COPY --from=builder /app/.venv /app/.venv
 
 ENV PATH="/app/.venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/app/pw-browsers
 
+COPY --from=builder /app/pw-browsers /app/pw-browsers
 COPY . .
 
 EXPOSE 8000
