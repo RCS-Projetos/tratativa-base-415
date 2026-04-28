@@ -13,6 +13,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 
 RUN uv sync --frozen --no-install-project --no-dev
+RUN uv run playwright install
 
 # --- ETAPA 2: Runner ---
 FROM python:3.14-slim
