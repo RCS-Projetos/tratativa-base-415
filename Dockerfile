@@ -14,7 +14,7 @@ COPY pyproject.toml uv.lock ./
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/app/pw-browsers
 RUN uv sync --frozen --no-install-project --no-dev
-RUN uv run playwright install chromium
+RUN /app/.venv/bin/playwright install chromium
 
 # --- ETAPA 2: Runner ---
 FROM python:3.14-slim
